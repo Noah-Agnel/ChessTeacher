@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Chess</title>
+<style>
+  #board { display: grid; grid-template-columns: repeat(8, 64px);
+           grid-template-rows: repeat(8, 64px); width: 512px; }
+  .sq { display: flex; align-items: center; justify-content: center;
+        font-size: 44px; cursor: pointer; user-select: none; }
+  .light { background: #f0d9b5; }
+  .dark  { background: #b58863; }
+  .selected { outline: 3px solid #2a7; outline-offset: -3px; }
+</style>
+</head>
+<body>
+<div id="board"></div>
+<p id="msg"></p>
+
+<script>
+const GLYPHS = { K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',
+                 k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟' };
+let selected = null;
+
+function parseFen(fen) {
+  const rows = fen.split(' ')[0].split('/');
+  return rows.map(r => {
+    const out = [];
+    for (const ch of r) {
+      if (/\d/.test(ch)) out.push(...Array(+ch).fill(''));
+      else out.push(ch);
+    }
+    return out;
+  });
+}
+
+function name(r, c) { return 'abcdefgh'[c] + (8 - r); }
+
+function render(fen) {
+  const grid = parseFen(fen);
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  grid.forEach((row, r) => row.forEach((p, c) => {
+    const sq = document.createElement('div');
+    const n = name(r, c);
+    sq.className = 'sq ' + ((r + c) % 2 ? 'dark' : 'light') +
+                   (selected === n ? ' selected' : '');
+    sq.textContent = p ? GLYPHS[p] : '';
+    sq.onclick = () => clickSquare(n);
+    board.appendChild(sq);
+  }));
+}
+
+async function clickSquare(n) {
+  if (!selected) { selected = n; return load(); }
+  if (selected === n) { selected = null; return load(); }
+  const res = await fetch('/api/move', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: selected, to: n })
+  });
+  document.getElementById('msg').textContent = res.ok ? '' : 'Illegal move';
+  selected = null;
+  render(await res.json());
+}
+
+async function load() {
+  render(await (await fetch('/api/state')).json());
+}
+load();
+</script>
+</body>
+</html>
