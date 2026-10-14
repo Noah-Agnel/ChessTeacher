@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>Chess</title>
 <style>
+  #app { display: flex; gap: 24px; align-items: flex-start; }
   #board { display: grid; grid-template-columns: repeat(8, 64px);
            grid-template-rows: repeat(8, 64px); width: 512px; }
   .sq { display: flex; align-items: center; justify-content: center;
@@ -11,16 +12,50 @@
   .light { background: #f0d9b5; }
   .dark  { background: #b58863; }
   .selected { outline: 3px solid #2a7; outline-offset: -3px; }
+  #controls { margin-top: 12px; display: flex; gap: 8px; align-items: center; }
+  #controls button { font-size: 18px; padding: 4px 12px; }
+  #promo button { font-size: 36px; margin-right: 6px; }
+
+  #moves { width: 240px; height: 512px; overflow-y: auto; box-sizing: border-box;
+           border: 1px solid #ccc; font-family: sans-serif; font-size: 16px; }
+  .row { display: grid; grid-template-columns: 40px 1fr 1fr; }
+  .num { color: #888; background: #f3f3f3; padding: 6px 8px; }
+  .mv  { padding: 6px 8px; }
+  .current { background: #cfd8dc; font-weight: bold; border-radius: 3px; }
+  .sq { position: relative; }
+  .hint::after { content: ''; position: absolute; top: 50%; left: 50%;
+                 width: 20px; height: 20px; border-radius: 50%;
+                 transform: translate(-50%, -50%);
+                 background: rgba(0, 0, 0, 0.2); pointer-events: none; }
+  .hint-capture::after { content: ''; position: absolute; inset: 0;
+                         box-sizing: border-box; border-radius: 50%;
+                         border: 6px solid rgba(0, 0, 0, 0.2); pointer-events: none; }
 </style>
 </head>
 <body>
-<div id="board"></div>
-<p id="msg"></p>
+<div id="app">
+  <div id="left">
+    <div id="board"></div>
+    <div id="controls">
+      <button onclick="act('/api/undo')" title="Previous move (←)">◀</button>
+      <button onclick="act('/api/redo')" title="Next move (→)">▶</button>
+      <span id="counter"></span>
+      <button onclick="act('/api/restart')">Restart</button>
+    </div>
+    <div id="promo"></div>
+    <p id="msg"></p>
+  </div>
+  <div id="moves"></div>
+</div>
 
 <script>
 const GLYPHS = { K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',
                  k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟' };
+const STATUTS = { ok: '', echec: 'Check!', pat: 'Stalemate' };
+const FIGURINES = true; // true: ♘f3 (comme chess.com), false: Nf3
 let selected = null;
+let legal = [];
+let etat = null;
 
 function parseFen(fen) {
   const rows = fen.split(' ')[0].split('/');
@@ -36,37 +71,139 @@ function parseFen(fen) {
 
 function name(r, c) { return 'abcdefgh'[c] + (8 - r); }
 
-function render(fen) {
-  const grid = parseFen(fen);
+function pieceAt(n) {
+  const grid = parseFen(etat.fen);
+  return grid[8 - +n[1]]['abcdefgh'.indexOf(n[0])];
+}
+
+function fig(san, white) {
+  if (!FIGURINES || !'KQRBN'.includes(san[0])) return san;
+  return GLYPHS[white ? san[0] : san[0].toLowerCase()] + san.slice(1);
+}
+
+function renderMoves(state) {
+  const box = document.getElementById('moves');
+  box.innerHTML = '';
+  const list = state.notation;
+  let current = null;
+  for (let i = 0; i < list.length; i += 2) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const num = document.createElement('div');
+    num.className = 'num';
+    num.textContent = (i / 2 + 1) + '.';
+    row.appendChild(num);
+    for (let j = i; j < i + 2; j++) {
+      const cell = document.createElement('div');
+      cell.className = 'mv';
+      if (j < list.length) {
+        cell.textContent = fig(list[j], j % 2 === 0);
+        // state.coup = nombre de coups affichés : le dernier coup affiché est l'indice coup-1
+        if (j === state.coup - 1) { cell.classList.add('current'); current = cell; }
+      }
+      row.appendChild(cell);
+    }
+    box.appendChild(row);
+  }
+  if (current) current.scrollIntoView({ block: 'nearest' });
+  else box.scrollTop = 0;
+}
+
+function render(state) {
+  etat = state;
+  const grid = parseFen(state.fen);
   const board = document.getElementById('board');
   board.innerHTML = '';
   grid.forEach((row, r) => row.forEach((p, c) => {
     const sq = document.createElement('div');
     const n = name(r, c);
+    const hint = legal.includes(n) ? (p ? ' hint-capture' : ' hint') : '';
     sq.className = 'sq ' + ((r + c) % 2 ? 'dark' : 'light') +
-                   (selected === n ? ' selected' : '');
+                   (selected === n ? ' selected' : '') + hint;
     sq.textContent = p ? GLYPHS[p] : '';
     sq.onclick = () => clickSquare(n);
     board.appendChild(sq);
   }));
+
+  renderMoves(state);
+  document.getElementById('counter').textContent = 'Move ' + state.coup + ' / ' + state.total;
+  let msg = state.statut === 'mat'
+    ? 'Checkmate, ' + (state.trait === 'Blanc' ? 'Black' : 'White') + ' wins'
+    : STATUTS[state.statut];
+  if (!state.live) msg = 'Viewing an earlier position (go to the last move to play). ' + msg;
+  document.getElementById('msg').textContent = msg;
+}
+
+function choosePromotion(white) {
+  return new Promise(resolve => {
+    const box = document.getElementById('promo');
+    box.innerHTML = '';
+    for (const t of ['Q', 'R', 'B', 'N']) {
+      const b = document.createElement('button');
+      b.textContent = GLYPHS[white ? t : t.toLowerCase()];
+      b.onclick = () => { box.innerHTML = ''; resolve(t); };
+      box.appendChild(b);
+    }
+  });
+}
+
+async function fetchLegal(n) {
+  return await (await fetch('/api/legal?from=' + n)).json();
 }
 
 async function clickSquare(n) {
-  if (!selected) { selected = n; return load(); }
-  if (selected === n) { selected = null; return load(); }
+  if (!etat.live) return;
+  const p = pieceAt(n);
+  const own = !!p && (p === p.toUpperCase()) === (etat.trait === 'Blanc');
+
+  if (!selected) {                       // first click: only your own pieces
+    if (!own) return;
+    selected = n;
+    legal = await fetchLegal(n);
+    return load();
+  }
+  if (selected === n) {                  // click again to deselect
+    selected = null; legal = [];
+    return load();
+  }
+  if (own) {                             // click another own piece: switch selection
+    selected = n;
+    legal = await fetchLegal(n);
+    return load();
+  }
+
+  const body = { from: selected, to: n };
+  const sel = pieceAt(selected);
+  if ((sel === 'P' && n[1] === '8') || (sel === 'p' && n[1] === '1')) {
+    body.promotion = await choosePromotion(sel === 'P');
+  }
+
   const res = await fetch('/api/move', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: selected, to: n })
+    body: JSON.stringify(body)
   });
-  document.getElementById('msg').textContent = res.ok ? '' : 'Illegal move';
-  selected = null;
+  const ok = res.ok;
+  selected = null; legal = [];
   render(await res.json());
+  if (!ok) document.getElementById('msg').textContent = 'Illegal move';
+}
+
+async function act(url) {
+  selected = null; legal = [];
+  document.getElementById('promo').innerHTML = '';
+  render(await (await fetch(url, { method: 'POST' })).json());
 }
 
 async function load() {
   render(await (await fetch('/api/state')).json());
 }
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft') act('/api/undo');
+  if (e.key === 'ArrowRight') act('/api/redo');
+});
+
 load();
 </script>
 </body>

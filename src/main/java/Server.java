@@ -4,10 +4,10 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.regex.*;
+import java.util.List;
 
 public class Server {
-    static Plateau plateau = new Plateau();
-    static String trait = "Blanc";
+    static Partie partie = new Partie();
 
     public static void main(String[] args) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
@@ -17,74 +17,56 @@ public class Server {
             send(ex, 200, "text/html; charset=utf-8", html);
         });
 
-        server.createContext("/api/state", ex ->
-            send(ex, 200, "application/json", json(fen())));
+        server.createContext("/api/state", ex -> send(ex, 200, "application/json", etat()));
 
         server.createContext("/api/move", ex -> {
             String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
             boolean ok = false;
             Matcher f = Pattern.compile("\"from\"\\s*:\\s*\"([a-h][1-8])\"").matcher(body);
             Matcher t = Pattern.compile("\"to\"\\s*:\\s*\"([a-h][1-8])\"").matcher(body);
-            if (f.find() && t.find()) ok = jouer(f.group(1), t.group(1));
-            send(ex, ok ? 200 : 400, "application/json", json(fen()));
+            Matcher p = Pattern.compile("\"promotion\"\\s*:\\s*\"([QRBN])\"").matcher(body);
+            if (f.find() && t.find()) {
+                ok = partie.jouer(f.group(1), t.group(1), p.find() ? p.group(1) : null);
+            }
+            send(ex, ok ? 200 : 400, "application/json", etat());
+        });
+
+        server.createContext("/api/undo", ex -> { partie.reculer();     send(ex, 200, "application/json", etat()); });
+        server.createContext("/api/redo", ex -> { partie.avancer();     send(ex, 200, "application/json", etat()); });
+        server.createContext("/api/restart", ex -> { partie.recommencer(); send(ex, 200, "application/json", etat()); });
+        server.createContext("/api/legal", ex -> {
+            String q = ex.getRequestURI().getQuery();   // ex: from=e2
+            StringBuilder sb = new StringBuilder("[");
+            if (q != null && q.matches("from=[a-h][1-8]")) {
+                List<String> cases = partie.coupsLegaux(q.substring(5));
+                for (int i = 0; i < cases.size(); i++) {
+                    if (i > 0) sb.append(',');
+                    sb.append('"').append(cases.get(i)).append('"');
+                }
+            }
+            send(ex, 200, "application/json", sb.append("]").toString());
         });
 
         server.start();
         System.out.println("http://localhost:8080");
     }
 
-    static boolean jouer(String from, String to) {
-        int c1 = from.charAt(0) - 'a', l1 = from.charAt(1) - '1';
-        int c2 = to.charAt(0) - 'a',   l2 = to.charAt(1) - '1';
-
-        Piece p = plateau.getPiece(c1, l1);
-        if (p == null || !p.getCouleur().equals(trait)) return false;
-        if (!p.deplacementValide(c2, l2)) return false;
-
-        Piece cible = plateau.getPiece(c2, l2);
-        if (cible != null && cible.getCouleur().equals(p.getCouleur())) return false;
-
-        if (p instanceof Pion) {
-            boolean droit = c1 == c2;
-            if (droit && cible != null) return false;   // un pion ne capture pas tout droit
-            if (!droit && cible == null) return false;  // diagonale = capture uniquement
+    static String etat() {
+        StringBuilder coups = new StringBuilder("[");
+        for (int i = 0; i < partie.getNotations().size(); i++) {
+            if (i > 0) coups.append(',');
+            coups.append('"').append(partie.getNotations().get(i)).append('"');
         }
+        coups.append(']');
 
-        if (!(p instanceof Cavalier)) {                 // chemin libre
-            int dc = Integer.signum(c2 - c1), dl = Integer.signum(l2 - l1);
-            int c = c1 + dc, l = l1 + dl;
-            while (c != c2 || l != l2) {
-                if (plateau.getPiece(c, l) != null) return false;
-                c += dc; l += dl;
-            }
-        }
-
-        plateau.poserPiece(null, c1, l1);
-        plateau.poserPiece(p, c2, l2);
-        trait = trait.equals("Blanc") ? "Noir" : "Blanc";
-        return true;
+        return "{\"fen\":\"" + partie.fen() + "\","
+             + "\"statut\":\"" + partie.getStatut() + "\","
+             + "\"trait\":\"" + partie.getTrait() + "\","
+             + "\"live\":" + partie.estEnDirect() + ","
+             + "\"coup\":" + partie.getCurseur() + ","
+             + "\"total\":" + partie.getTotal() + ","
+             + "\"notation\":" + coups + "}";
     }
-
-    static String fen() {
-        StringBuilder sb = new StringBuilder();
-        for (int l = 7; l >= 0; l--) {
-            int vides = 0;
-            for (int c = 0; c < 8; c++) {
-                Piece p = plateau.getPiece(c, l);
-                if (p == null) { vides++; continue; }
-                if (vides > 0) { sb.append(vides); vides = 0; }
-                char ch = p instanceof Tour ? 'R' : p instanceof Cavalier ? 'N'
-                        : p instanceof Fou ? 'B' : p instanceof Reine ? 'Q'
-                        : p instanceof Roi ? 'K' : 'P';
-                sb.append(p.getCouleur().equals("Blanc") ? ch : Character.toLowerCase(ch));
-            }
-            if (vides > 0) sb.append(vides);
-            if (l > 0) sb.append('/');
-        }
-        return sb + (trait.equals("Blanc") ? " w" : " b");
-    }
-
-    static String json(String s) { return "\"" + s + "\""; }
 
     static void send(HttpExchange ex, int code, String type, byte[] data) throws IOException {
         ex.getResponseHeaders().set("Content-Type", type);

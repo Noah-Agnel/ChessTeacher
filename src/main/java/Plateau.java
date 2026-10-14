@@ -22,6 +22,46 @@ public class Plateau {
         }
     }
 
+    public int[] trouverRoi(String couleur) {
+        for (int l = 0; l < 8; l++) {
+            for (int c = 0; c < 8; c++) {
+                Piece p = grille[l][c];
+                if (p instanceof Roi && p.getCouleur().equals(couleur)) {
+                    return new int[] { c, l };
+                }
+            }
+        }
+        return null;
+    }
+
+    public static char type(Piece p) {
+        return p instanceof Tour ? 'R' : p instanceof Cavalier ? 'N'
+             : p instanceof Fou ? 'B' : p instanceof Reine ? 'Q'
+             : p instanceof Roi ? 'K' : 'P';
+    }
+
+    public static Piece creer(char t, String couleur, int c, int l) {
+        switch (t) {
+            case 'R': return new Tour(couleur, c, l);
+            case 'N': return new Cavalier(couleur, c, l);
+            case 'B': return new Fou(couleur, c, l);
+            case 'Q': return new Reine(couleur, c, l);
+            case 'K': return new Roi(couleur, c, l);
+            default:  return new Pion(couleur, c, l);
+        }
+    }
+
+    public Plateau copie() {
+        Plateau n = new Plateau();
+        for (int l = 0; l < 8; l++) {
+            for (int c = 0; c < 8; c++) {
+                Piece p = grille[l][c];
+                n.grille[l][c] = (p == null) ? null : creer(type(p), p.getCouleur(), c, l);
+            }
+        }
+        return n;
+    }
+
     public void initialiserPlateau() {
         // Vider le plateau
         for (int l = 0; l < 8; l++) {
