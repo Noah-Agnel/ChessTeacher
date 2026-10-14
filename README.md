@@ -32,7 +32,7 @@ java -cp out Server
 Sinon, il suffit de se rendre dans le répertoire, récupérer des potentiels modifications, puis lancer le code:
 
 ```bash
-cd ChessTeacher
+cd chemin/vers/ChessTeacher #attention il faut mettre le bon chemin par exemple bureau/ChessTeacher
 git pull
 
 javac -d out src/main/java/*.java
