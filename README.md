@@ -1,6 +1,6 @@
 # ChessTeacher
 
-Un jeu d'échecs jouable dans le navigateur, propulsé par un petit serveur Java. Le serveur garde l'état de la partie et applique les règles ; la page web affiche l'échiquier.
+Un jeu d'échecs jouable dans le navigateur, géré par un serveur Java. Le serveur garde l'état de la partie et applique les règles ; la page web affiche l'échiquier.
 
 ## Fonctionnalités
 
@@ -17,9 +17,9 @@ Un jeu d'échecs jouable dans le navigateur, propulsé par un petit serveur Java
 - **JDK 11 ou plus récent** (vérifier avec `java -version` et `javac -version`)
 - Un navigateur web
 
-Aucun Maven, Gradle ou autre dépendance n'est nécessaire.
-
 ## Lancer le projet
+
+Si le projet n'est pas déjà cloné:
 
 ```bash
 git clone https://github.com/Noah-Agnel/ChessTeacher.git
@@ -29,13 +29,22 @@ javac -d out src/main/java/*.java
 java -cp out Server
 ```
 
+Sinon, il suffit de se rendre dans le répertoire, récupérer des potentiels modifications, puis lancer le code:
+
+```bash
+cd ChessTeacher
+git pull
+
+javac -d out src/main/java/*.java
+java -cp out Server
+```
+
+
 Le terminal affiche `http://localhost:8080`. Ouvrez cette adresse dans votre navigateur.
 
-> Lancez les commandes depuis la racine du projet (le dossier `ChessTeacher`). Le serveur cherche la page à l'emplacement `src/main/resources/public/index.html` : le démarrer depuis un autre dossier provoquera une erreur.
+> Attention: si les commandes sont lancés depuis un autre dossier que la racine du projet (le dossier `ChessTeacher`). Une erreur sera provoqué car les fichiers seront cherchés au mauvais endroit.
 
 Pour arrêter le serveur, appuyez sur `Ctrl+C` dans le terminal.
-
-Si le port 8080 est déjà utilisé, changez le numéro dans `Server.java` (`new InetSocketAddress(8080)`), recompilez, puis ouvrez la nouvelle adresse.
 
 ## Comment jouer
 
@@ -59,12 +68,3 @@ src/main/java/
 src/main/resources/public/
   index.html       Échiquier, liste des coups et boutons (HTML + JavaScript)
 ```
-
-Le code et les commentaires sont en français (`Plateau` = échiquier, `Partie` = partie, `Pion` = pawn, `Tour` = rook, `Cavalier` = knight, `Fou` = bishop, `Reine` = queen, `Roi` = king).
-
-### API
-
-| Endpoint | Méthode | Rôle |
-|---|---|---|
-| `/api/state` | GET | Position actuelle, statut, liste des coups |
-| `/api/move` | POST | Jouer un coup (`{"from":"e2","to":"e4"}`,
