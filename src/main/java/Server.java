@@ -8,6 +8,8 @@ import java.util.List;
 
 public class Server {
     static Partie partie = new Partie();
+    static StockfishAI ai = new StockfishAI("./stockfish-macos-universal"); // Chemin vers l'exécutable
+    static int niveauIA = 1500; // Niveau par défaut
 
     public static void main(String[] args) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
@@ -45,6 +47,38 @@ public class Server {
                 }
             }
             send(ex, 200, "application/json", sb.append("]").toString());
+        });
+
+        // Route pour faire jouer l'IA 
+        server.createContext("/api/ai-move", ex -> {
+            // On configure le niveau
+            ai.setNiveau(niveauIA);
+
+            // On récupère la position actuelle au format FEN générée par ton code Partie
+            String fenActuelle = partie.fen();
+
+            // On demande à Stockfish de trouver le coup (réflexion de 500 ms)
+            String meilleurCoup = ai.trouverMeilleurCoup(fenActuelle, 500); // ex: "e7e5"
+
+            if (meilleurCoup != null && meilleurCoup.length() >= 4) {
+                String from = meilleurCoup.substring(0, 2);
+                String to = meilleurCoup.substring(2, 4);
+                String promo = meilleurCoup.length() > 4 ? String.valueOf(meilleurCoup.charAt(4)) : null;
+
+                // On joue le coup dans ton moteur Partie existant !
+                partie.jouer(from, to, promo);
+            }
+            send(ex, 200, "application/json", etat());
+        });
+
+        // Nouvelle route pour changer le niveau
+        server.createContext("/api/level", ex -> {
+            String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            Matcher m = Pattern.compile("\"elo\"\\s*:\\s*(\\d+)").matcher(body);
+            if (m.find()) {
+                niveauIA = Integer.parseInt(m.group(1));
+            }
+            send(ex, 200, "application/json", "{\"status\":\"ok\"}");
         });
 
         server.start();

@@ -41,6 +41,13 @@
       <button onclick="act('/api/redo')" title="Next move (→)">▶</button>
       <span id="counter"></span>
       <button onclick="act('/api/restart')">Restart</button>
+      <!-- MENU DÉROULANT -->
+      <select id="ai-level" onchange="changerNiveauIA()" style="font-size: 16px; padding: 4px;">
+        <option value="1000">Débutant (1000)</option>
+        <option value="1500" selected>Intermédiaire (1500)</option>
+        <option value="2000">Avancé (2000)</option>
+        <option value="3000">Expert (3000)</option>
+      </select>
     </div>
     <div id="promo"></div>
     <p id="msg"></p>
@@ -156,7 +163,7 @@ async function clickSquare(n) {
   const p = pieceAt(n);
   const own = !!p && (p === p.toUpperCase()) === (etat.trait === 'Blanc');
 
-  if (!selected) {                       // first click: only your own pieces
+  if (!selected) {                    // first click: only your own pieces
     if (!own) return;
     selected = n;
     legal = await fetchLegal(n);
@@ -184,9 +191,30 @@ async function clickSquare(n) {
     body: JSON.stringify(body)
   });
   const ok = res.ok;
+  const newState = await res.json();
+  
   selected = null; legal = [];
-  render(await res.json());
-  if (!ok) document.getElementById('msg').textContent = 'Illegal move';
+  render(newState);
+  
+  if (!ok) {
+    document.getElementById('msg').textContent = 'Illegal move';
+    return;
+  }
+
+  // --- INTÉGRATION STOCKFISH ---
+  // L'IA joue si la partie est en cours ("ok" ou "echec") et que c'est aux Noirs
+  if ((newState.statut === 'ok' || newState.statut === 'echec') && newState.trait === 'Noir') {
+    document.getElementById('msg').textContent = "Stockfish réfléchit...";
+    
+    // Petit délai de sécurité pour laisser l'UI souffler, puis appel de l'IA
+    setTimeout(async () => {
+      const aiRes = await fetch('/api/ai-move');
+      if (aiRes.ok) {
+        const aiState = await aiRes.json();
+        render(aiState);
+      }
+    }, 200);
+  }
 }
 
 async function act(url) {
@@ -197,6 +225,16 @@ async function act(url) {
 
 async function load() {
   render(await (await fetch('/api/state')).json());
+}
+
+// --- FONCTION POUR CHANGER LE NIVEAU DE L'IA ---
+async function changerNiveauIA() {
+  const elo = document.getElementById('ai-level').value;
+  await fetch('/api/level', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ elo: parseInt(elo) })
+  });
 }
 
 document.addEventListener('keydown', e => {
