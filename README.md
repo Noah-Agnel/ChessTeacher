@@ -16,6 +16,7 @@ Un jeu d'échecs jouable dans le navigateur, géré par un serveur Java. Le serv
 
 - **JDK 11 ou plus récent** (vérifier avec `java -version` et `javac -version`)
 - Un navigateur web
+- Sur MacOS, télécharger l'exécutable stockfish-macos-universal sur stockfishchess.org et le mettre à la racine du projet. Il faudra ensuite débloquer les permissions en entrant ces deux commandes dans le terminal (toujours à la racine du projet) : « chmod +x stockfish-macos-universal » et « xattr -d com.apple.quarantine stockfish-macos-universal »
 
 ## Lancer le projet
 
