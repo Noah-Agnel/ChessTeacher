@@ -16,6 +16,9 @@ Un jeu d'échecs jouable dans le navigateur, géré par un serveur Java. Le serv
 
 - **JDK 11 ou plus récent** (vérifier avec `java -version` et `javac -version`)
 - Un navigateur web
+- **Stockfish (Moteur d'IA)** : Télécharger l'exécutable sur stockfishchess.org et le placer à la racine absolue du projet.
+  - **Sur Windows :** Renommer le fichier téléchargé exactement en `stockfish-windows.exe`.
+  - **Sur macOS :** Renommer le fichier en `stockfish-macos-universal`. Ouvrir un terminal à la racine du projet et débloquer les permissions avec : `chmod +x stockfish-macos-universal` et `xattr -d com.apple.quarantine stockfish-macos-universal`.
 
 ## Lancer le projet
 
