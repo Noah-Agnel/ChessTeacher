@@ -8,7 +8,11 @@ import java.util.List;
 
 public class Server {
     static Partie partie = new Partie();
-    static StockfishAI ai = new StockfishAI("./stockfish-macos-universal"); // Chemin vers l'exécutable
+    
+    static String os = System.getProperty("os.name").toLowerCase();
+    static String nomFichier = os.contains("win") ? "stockfish-windows.exe" : "stockfish-macos-universal";
+    
+    static StockfishAI ai = new StockfishAI(nomFichier);
     static int niveauIA = 1500; // Niveau par défaut
 
     public static void main(String[] args) throws IOException {
