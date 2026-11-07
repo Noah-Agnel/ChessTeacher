@@ -1,3 +1,9 @@
 Cahier_des_charges___Jeu_d_apprentissage_des_échecs_assisté_par_IA.pdf
 stockfish-macos-universal
 **/.DS_Store
+out/
+*.class
+.metals/
+.vscode/
+stockfish/
+stockfish-*
