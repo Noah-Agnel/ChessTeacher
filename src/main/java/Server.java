@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.regex.*;
 import java.util.List;
+import java.util.Locale;
 
 public class Server {
     static Partie partie = new Partie();
@@ -67,12 +68,51 @@ public class Server {
             if (meilleurCoup != null && meilleurCoup.length() >= 4) {
                 String from = meilleurCoup.substring(0, 2);
                 String to = meilleurCoup.substring(2, 4);
-                String promo = meilleurCoup.length() > 4 ? String.valueOf(meilleurCoup.charAt(4)) : null;
+                // Stockfish renvoie la promotion en minuscule ("e7e8q"), Partie attend "Q"
+                String promo = meilleurCoup.length() > 4 ? String.valueOf(meilleurCoup.charAt(4)).toUpperCase() : null;
 
                 // On joue le coup dans ton moteur Partie existant !
                 partie.jouer(from, to, promo);
             }
             send(ex, 200, "application/json", etat());
+        });
+
+        // Meilleur coup (Stockfish à pleine force) pour la position actuellement affichée,
+        // y compris quand on revient en arrière avec les flèches. Le coup n'est pas joué.
+        server.createContext("/api/best-move", ex -> {
+            int coup = partie.getCurseur();
+            String fen = partie.fen();
+            String base = "{\"coup\":" + coup + ",\"fen\":\"" + fen + "\"";
+
+            String statut = partie.getStatut();
+            if (statut.equals("mat") || statut.equals("pat")) {
+                send(ex, 200, "application/json", base + ",\"fin\":true}");
+                return;
+            }
+
+            StockfishAI.Analyse a = ai.analyser(fen, 1000); // 1 s de réflexion
+            if (a == null) {
+                send(ex, 503, "application/json", base + ",\"erreur\":\"Stockfish indisponible\"}");
+                return;
+            }
+
+            // Stockfish donne le score du point de vue du joueur au trait ; on l'affiche
+            // du point de vue des Blancs, comme chess.com (+ = avantage Blanc).
+            int signe = partie.getTrait().equals("Blanc") ? 1 : -1;
+            String eval;
+            if (a.mat != null) {
+                int m = signe * a.mat;
+                eval = (m > 0 ? "M" : "-M") + Math.abs(m);
+            } else {
+                int cp = signe * (a.centipions == null ? 0 : a.centipions);
+                eval = String.format(Locale.US, "%+.2f", cp / 100.0);
+            }
+
+            send(ex, 200, "application/json", base
+                + ",\"uci\":\"" + a.coup + "\""
+                + ",\"san\":\"" + partie.notationCoup(a.coup) + "\""
+                + ",\"eval\":\"" + eval + "\""
+                + ",\"profondeur\":" + a.profondeur + "}");
         });
 
         // Nouvelle route pour changer le niveau

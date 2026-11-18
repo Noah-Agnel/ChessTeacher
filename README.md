@@ -11,6 +11,7 @@ Un jeu d'échecs jouable dans le navigateur, géré par un serveur Java. Le serv
 - Liste des coups à droite en notation algébrique standard (`e4`, `Nf3`, `exd5`, `O-O`, `e8=Q`, `+` et `#`)
 - Navigation dans la partie avec les flèches précédent / suivant ; le coup affiché est surligné dans la liste
 - Bouton pour recommencer la partie
+- Bouton **« Montrer meilleur coup »** : pour n'importe quelle position de la partie (y compris en revenant en arrière avec les flèches), Stockfish analyse la position à pleine force et affiche le meilleur coup avec une flèche sur l'échiquier, sa notation et l'évaluation (comme sur chess.com)
 
 ## Prérequis
 
@@ -57,6 +58,7 @@ Pour arrêter le serveur, appuyez sur `Ctrl+C` dans le terminal.
 - **Prise en passant :** cliquez sur votre pion, puis sur la case vide en diagonale, derrière le pion adverse qui vient d'avancer de deux cases.
 - **Promotion :** quand un pion atteint la dernière rangée, choisissez la nouvelle pièce (dame, tour, fou ou cavalier).
 - **Revoir la partie :** utilisez les boutons ◀ et ▶ ou les flèches gauche / droite du clavier. Le coup correspondant est surligné dans la liste. Quand vous regardez une position passée, l'échiquier est en lecture seule ; revenez au dernier coup pour continuer à jouer.
+- **Meilleur coup :** sur n'importe quelle position (en direct ou en revenant en arrière avec ◀ / ←), cliquez sur « Montrer meilleur coup » (ou touche `B`). Après environ 1 s, une flèche orange indique le coup recommandé par Stockfish, et la ligne en dessous donne le coup (ex. `♘f3`) et l'évaluation du point de vue des Blancs (`+0.35` = avantage Blanc, `-M3` = les Noirs matent en 3). Recliquez pour masquer. La flèche disparaît dès qu'on change de position.
 - **Recommencer :** le bouton Restart remet l'échiquier et la liste des coups à zéro.
 
 ## Structure du projet
@@ -67,7 +69,8 @@ src/main/java/
   Plateau.java     L'échiquier 8x8
   Partie.java      Logique de jeu : légalité des coups, échec, roque,
                    prise en passant, promotion, historique, notation
-  Server.java      Serveur HTTP et API JSON (point d'entrée)
+  Server.java      Serveur HTTP et API JSON (point d'entrée), dont /api/best-move
+  StockfishAI.java Communication UCI avec Stockfish (coup de l'IA, analyse)
 src/main/resources/public/
   index.html       Échiquier, liste des coups et boutons (HTML + JavaScript)
 ```

@@ -314,6 +314,72 @@ public class Partie {
             if (vides > 0) sb.append(vides);
             if (l > 0) sb.append('/');
         }
-        return sb + (getTrait().equals("Blanc") ? " w" : " b");
+        sb.append(getTrait().equals("Blanc") ? " w " : " b ");
+        sb.append(droitsRoque()).append(' ').append(caseEnPassant());
+        sb.append(" 0 ").append(curseur / 2 + 1);
+        return sb.toString();
+    }
+
+    // Droits de roque au format FEN ("KQkq", "Kq", "-"...), déduits de l'historique
+    private String droitsRoque() {
+        String s = (droitRoque("Blanc", true) ? "K" : "") + (droitRoque("Blanc", false) ? "Q" : "")
+                 + (droitRoque("Noir", true) ? "k" : "") + (droitRoque("Noir", false) ? "q" : "");
+        return s.isEmpty() ? "-" : s;
+    }
+
+    private boolean droitRoque(String couleur, boolean petit) {
+        int ligne = couleur.equals("Blanc") ? 0 : 7;
+        int cTour = petit ? 7 : 0;
+        Piece roi = plateau.getPiece(4, ligne), tour = plateau.getPiece(cTour, ligne);
+        if (!(roi instanceof Roi) || !roi.getCouleur().equals(couleur)) return false;
+        if (!(tour instanceof Tour) || !tour.getCouleur().equals(couleur)) return false;
+        String caseRoi = "e" + (ligne + 1);
+        String caseTour = "" + (char) ('a' + cTour) + (ligne + 1);
+        for (String m : joues()) {
+            String de = m.substring(0, 2), vers = m.substring(2, 4);
+            if (de.equals(caseRoi) || de.equals(caseTour) || vers.equals(caseTour)) return false;
+        }
+        return true;
+    }
+
+    // Case de prise en passant au format FEN ("e3") si le dernier coup est une avance de 2 d'un pion
+    private String caseEnPassant() {
+        List<String> h = joues();
+        if (h.isEmpty()) return "-";
+        String m = h.get(h.size() - 1);
+        int c1 = m.charAt(0) - 'a', l1 = m.charAt(1) - '1';
+        int c2 = m.charAt(2) - 'a', l2 = m.charAt(3) - '1';
+        if (c1 == c2 && Math.abs(l2 - l1) == 2 && plateau.getPiece(c2, l2) instanceof Pion) {
+            return "" + (char) ('a' + c1) + ((l1 + l2) / 2 + 1);
+        }
+        return "-";
+    }
+
+    // ---------- Notation d'un coup proposé (ex: meilleur coup de Stockfish) ----------
+
+    // Convertit un coup UCI ("g1f3", "e7e8q") en notation algébrique ("Nf3", "e8=Q+")
+    // pour la position actuellement affichée, sans le jouer.
+    public String notationCoup(String uci) {
+        if (uci == null || uci.length() < 4) return null;
+        int c1 = uci.charAt(0) - 'a', l1 = uci.charAt(1) - '1';
+        int c2 = uci.charAt(2) - 'a', l2 = uci.charAt(3) - '1';
+        Piece p = plateau.getPiece(c1, l1);
+        if (p == null) return uci;
+        char promo = uci.length() > 4 ? Character.toUpperCase(uci.charAt(4)) : 0;
+
+        String san = notation(p, c1, l1, c2, l2, promo);
+
+        // échec ou mat après le coup ?
+        Plateau essai = plateau.copie();
+        appliquer(essai, c1, l1, c2, l2, promo);
+        String adversaire = p.getCouleur().equals("Blanc") ? "Noir" : "Blanc";
+        if (roiEnEchec(essai, adversaire)) {
+            Plateau sauvegarde = plateau;
+            plateau = essai;
+            boolean coups = aDesCoupsLegaux(adversaire);
+            plateau = sauvegarde;
+            san += coups ? "+" : "#";
+        }
+        return san;
     }
 }
