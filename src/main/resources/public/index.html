@@ -37,6 +37,14 @@
             pointer-events: none; }
   .best-sq { box-shadow: inset 0 0 0 512px rgba(255, 170, 0, 0.35); }
   #best-btn { font-size: 16px; padding: 4px 10px; }
+
+  /* Curseur de niveau du bot */
+  #niveau { margin-top: 12px; font-family: sans-serif; font-size: 16px; width: 512px; }
+  #niveau .titre { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  #elo-val { font-weight: bold; }
+  #elo-cat { color: #666; }
+  #ai-level { width: 100%; accent-color: #b58863; cursor: pointer; }
+  #niveau .bornes { display: flex; justify-content: space-between; color: #999; font-size: 12px; }
   #best-info { font-family: sans-serif; font-size: 16px; min-height: 20px; margin: 8px 0 0; }
   #best-info .eval { display: inline-block; padding: 1px 6px; border-radius: 3px;
                      font-weight: bold; margin-left: 6px; }
@@ -56,13 +64,16 @@
       <button onclick="act('/api/redo')" title="Next move (→)">▶</button>
       <span id="counter"></span>
       <button onclick="act('/api/restart')">Restart</button>
-      <!-- MENU DÉROULANT -->
-      <select id="ai-level" onchange="changerNiveauIA()" style="font-size: 16px; padding: 4px;">
-        <option value="1000">Débutant (1000)</option>
-        <option value="1500" selected>Intermédiaire (1500)</option>
-        <option value="2000">Avancé (2000)</option>
-        <option value="3000">Expert (3000)</option>
-      </select>
+    </div>
+    <!-- CURSEUR DE NIVEAU DU BOT -->
+    <div id="niveau">
+      <div class="titre">
+        <span>Niveau du bot : <span id="elo-val">1500</span> Elo</span>
+        <span id="elo-cat"></span>
+      </div>
+      <input type="range" id="ai-level" min="200" max="3000" step="50" value="1500"
+             oninput="afficherNiveau(this.value)" onchange="changerNiveauIA()">
+      <div class="bornes"><span>200</span><span>3000</span></div>
     </div>
     <div id="controls">
       <button id="best-btn" onclick="toggleBestMove()" title="Meilleur coup selon Stockfish (B)">Montrer meilleur coup</button>
@@ -158,6 +169,11 @@ function render(state) {
 
   renderMoves(state);
   renderBest(state);
+  if (state.elo && !niveauInitialise) {     // au chargement : reprendre le niveau du serveur
+    document.getElementById('ai-level').value = state.elo;
+    afficherNiveau(state.elo);
+    niveauInitialise = true;
+  }
   document.getElementById('counter').textContent = 'Move ' + state.coup + ' / ' + state.total;
   let msg = state.statut === 'mat'
     ? 'Checkmate, ' + (state.trait === 'Blanc' ? 'Black' : 'White') + ' wins'
@@ -328,7 +344,24 @@ async function load() {
   render(await (await fetch('/api/state')).json());
 }
 
-// --- FONCTION POUR CHANGER LE NIVEAU DE L'IA ---
+// --- NIVEAU DE L'IA (curseur de 200 à 3000 Elo) ---
+let niveauInitialise = false;
+
+function categorieNiveau(elo) {
+  if (elo < 600)  return 'Grand débutant';
+  if (elo < 1000) return 'Débutant';
+  if (elo < 1400) return 'Occasionnel';
+  if (elo < 1800) return 'Intermédiaire';
+  if (elo < 2200) return 'Avancé';
+  if (elo < 2600) return 'Maître';
+  return 'Grand maître';
+}
+
+function afficherNiveau(elo) {
+  document.getElementById('elo-val').textContent = elo;
+  document.getElementById('elo-cat').textContent = categorieNiveau(+elo);
+}
+
 async function changerNiveauIA() {
   const elo = document.getElementById('ai-level').value;
   await fetch('/api/level', {
@@ -339,6 +372,7 @@ async function changerNiveauIA() {
 }
 
 document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return; // ex: flèches sur le curseur
   if (e.key === 'ArrowLeft') act('/api/undo');
   if (e.key === 'ArrowRight') act('/api/redo');
   if (e.key === 'b' || e.key === 'B') toggleBestMove();

@@ -14,7 +14,10 @@ public class Server {
     static String nomFichier = os.contains("win") ? "stockfish-windows.exe" : "./stockfish-macos-universal";
     
     static StockfishAI ai = new StockfishAI(nomFichier);
-    static int niveauIA = 1500; // Niveau par défaut
+    static int niveauIA = 1500; // Niveau par défaut (Elo, de ELO_MIN à ELO_MAX)
+    static final int ELO_MIN = 200, ELO_MAX = 3000;
+    // Stockfish n'accepte pas d'Elo en dessous de 1320 (voir stockfish/src/search.h)
+    static final int ELO_MIN_STOCKFISH = 1320;
 
     public static void main(String[] args) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
@@ -56,14 +59,23 @@ public class Server {
 
         // Route pour faire jouer l'IA 
         server.createContext("/api/ai-move", ex -> {
-            // On configure le niveau
-            ai.setNiveau(niveauIA);
+            // On configure le niveau (Stockfish ne descend pas sous 1320)
+            ai.setNiveau(Math.max(niveauIA, ELO_MIN_STOCKFISH));
 
-            // On récupère la position actuelle au format FEN générée par ton code Partie
-            String fenActuelle = partie.fen();
+            // En dessous de 1320, on affaiblit le bot en jouant parfois un coup légal au hasard :
+            // 0 % de coups au hasard à 1320 Elo, jusqu'à 90 % à 200 Elo.
+            double probaHasard = niveauIA < ELO_MIN_STOCKFISH
+                ? 0.9 * (ELO_MIN_STOCKFISH - niveauIA) / (double) (ELO_MIN_STOCKFISH - ELO_MIN)
+                : 0;
 
-            // On demande à Stockfish de trouver le coup (réflexion de 500 ms)
-            String meilleurCoup = ai.trouverMeilleurCoup(fenActuelle, 500); // ex: "e7e5"
+            String meilleurCoup;
+            List<String> coups = partie.tousLesCoupsLegaux();
+            if (!coups.isEmpty() && Math.random() < probaHasard) {
+                meilleurCoup = coups.get((int) (Math.random() * coups.size()));
+            } else {
+                // On demande à Stockfish de trouver le coup (réflexion de 500 ms)
+                meilleurCoup = ai.trouverMeilleurCoup(partie.fen(), 500); // ex: "e7e5"
+            }
 
             if (meilleurCoup != null && meilleurCoup.length() >= 4) {
                 String from = meilleurCoup.substring(0, 2);
@@ -120,7 +132,7 @@ public class Server {
             String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
             Matcher m = Pattern.compile("\"elo\"\\s*:\\s*(\\d+)").matcher(body);
             if (m.find()) {
-                niveauIA = Integer.parseInt(m.group(1));
+                niveauIA = Math.max(ELO_MIN, Math.min(ELO_MAX, Integer.parseInt(m.group(1))));
             }
             send(ex, 200, "application/json", "{\"status\":\"ok\"}");
         });
@@ -143,6 +155,7 @@ public class Server {
              + "\"live\":" + partie.estEnDirect() + ","
              + "\"coup\":" + partie.getCurseur() + ","
              + "\"total\":" + partie.getTotal() + ","
+             + "\"elo\":" + niveauIA + ","
              + "\"notation\":" + coups + "}";
     }
 

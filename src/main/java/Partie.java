@@ -86,6 +86,22 @@ public class Partie {
         return res;
     }
 
+    // Tous les coups légaux du joueur au trait, au format UCI ("e2e4", "e7e8Q")
+    public List<String> tousLesCoupsLegaux() {
+        List<String> res = new ArrayList<>();
+        for (int l = 0; l < 8; l++) {
+            for (int c = 0; c < 8; c++) {
+                String from = "" + (char) ('a' + c) + (l + 1);
+                Piece p = plateau.getPiece(c, l);
+                for (String to : coupsLegaux(from)) {
+                    boolean promo = p instanceof Pion && (to.charAt(1) == '8' || to.charAt(1) == '1');
+                    res.add(from + to + (promo ? "Q" : ""));
+                }
+            }
+        }
+        return res;
+    }
+
     // Notation algébrique standard : e4, Nf3, Bxc6, exd5, Nbd2, O-O, e8=Q
     private String notation(Piece p, int c1, int l1, int c2, int l2, char promo) {
         if (p instanceof Roi && Math.abs(c2 - c1) == 2) {
